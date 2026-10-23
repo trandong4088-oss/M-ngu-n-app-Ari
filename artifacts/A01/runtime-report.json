@@ -1,0 +1,96 @@
+{
+  "task_id": "A01",
+  "task_name": "Repository Bootstrap & Reproducible Runtime",
+  "timestamp": "2026-10-23T14:10:06.034398+00:00",
+  "status": "PASS",
+  "doctor": {
+    "schema_version": "1.0",
+    "timestamp": "2026-10-23T14:10:06.034398+00:00",
+    "aro_worker_version": "0.1.0",
+    "overall_status": "DEGRADED",
+    "checks": [
+      {
+        "name": "python_version",
+        "category": "runtime",
+        "status": "PASS",
+        "version": "3.11.17",
+        "executable": "/app/applet/worker/.venv/bin/python",
+        "detail": "Python 3.11.17 on Linux x86_64",
+        "actionable_reason": null
+      },
+      {
+        "name": "disk_space",
+        "category": "storage",
+        "status": "PASS",
+        "free_gb": 755.2,
+        "total_gb": 755.75,
+        "detail": "755.2 GB free on /app/applet",
+        "actionable_reason": null
+      },
+      {
+        "name": "ffmpeg_binary",
+        "category": "media",
+        "status": "PASS",
+        "ffmpeg_path": "/usr/bin/ffmpeg",
+        "ffprobe_path": "/usr/bin/ffprobe",
+        "version_line": "ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 Copyright (c) 2000-2021 the FFmpeg developers",
+        "detail": "ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 Copyright (c) 2000-2021 the FFmpeg developers",
+        "actionable_reason": null
+      },
+      {
+        "name": "ffmpeg_filters",
+        "category": "media",
+        "status": "PASS",
+        "verified_filters": [
+          "loudnorm",
+          "sidechaincompress",
+          "ass",
+          "subtitles"
+        ],
+        "detail": "All required filters (loudnorm, sidechaincompress, ass, subtitles) verified.",
+        "actionable_reason": null
+      },
+      {
+        "name": "cuda_gpu",
+        "category": "hardware",
+        "status": "BLOCKED",
+        "cuda_available": false,
+        "device": "cpu",
+        "detail": "No NVIDIA GPU (nvidia-smi not found). Running on CPU host.",
+        "actionable_reason": "GPU acceleration disabled. CPU fallback will be used for ASR/OCR/TTS."
+      }
+    ],
+    "supported_features": [
+      "cli",
+      "doctor",
+      "audio_extract_cpu",
+      "ffmpeg_loudnorm_cpu"
+    ],
+    "blocked_reasons": {
+      "cuda_acceleration": "NVIDIA CUDA GPU not detected; running in CPU fallback mode.",
+      "uvr_separation": "UVR vocal separation requires CUDA GPU; duck_original mode will be used.",
+      "contracts_v1": "Scheduled for implementation in Task A02.",
+      "drive_adapter": "Scheduled for implementation in Task A03.",
+      "ocr_hardsub": "Scheduled for implementation in Task A08.",
+      "asr_whisper": "Scheduled for implementation in Task A09.",
+      "tts_vieneu": "Scheduled for implementation in Task A12.",
+      "render_pipeline": "Scheduled for implementation in Task A16."
+    }
+  },
+  "lock_hashes": {
+    "worker/uv.lock": "99692f27a5f26b52103493f28141c8a666166dfd421fa995f29bdbdfe21a5abb",
+    "locks/ffmpeg-manifest.json": "e3510974cfbfc056f6f89ddcb60ef146ffcfca33011135295b0a0cbf1fd9e377",
+    "locks/runtime-profiles.json": "2b455abdcf791bb5977ef6e9bb1764964d8f6c97b31975e7db6aa20a1fee9e0f"
+  },
+  "criteria": {
+    "repo_monorepo_layout": "PASS",
+    "aro_worker_package_installed": "PASS",
+    "cli_aro_version_functional": "PASS",
+    "cli_aro_doctor_diagnosis": "PASS",
+    "reproducible_runtime_uv_cpython311": "PASS",
+    "ffmpeg_filters_ass_loudnorm_verified": "PASS",
+    "architecture_specs_copied": "PASS",
+    "cuda_gpu_acceleration": "BLOCKED (CPU host environment, actionable fallback)",
+    "target_contracts_a02": "BLOCKED (Scheduled for A02)"
+  }
+}

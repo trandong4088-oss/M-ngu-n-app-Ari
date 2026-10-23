@@ -1,0 +1,316 @@
+# Final Source Tree
+
+**ARO_DESIGN_DECISION**. Đây là cây repo mục tiêu để Arena tạo, không phải code đã tồn tại. Monorepo `aro-studio/`; path relative to repo root. Core package `aro_worker`; Android package `studio.aro`. Không đưa notebooks business logic vào package, không copy modules từ nguồn RE.
+
+## Boundary và dependency direction
+
+`core/models/config/errors/canonical` không import storage/ML. `storage` chỉ thao tác bytes/IDs. `cache` dùng core+storage. `jobs` dùng core/storage/cache, controller không import ML. Domain media/subtitle/ocr/asr/translation/memory/tts/audio/render implement Stage interface. `core/runner` load registry adapters lazy, không import optional models lúc CLI help. `validation` consume artifacts, không sửa chúng. Android feature→repository→core/database/drive, không feature→model inference.
+
+`contracts/v1` và fixtures là nguồn wire truth; JSONL pages indexed bởi manifests. configs defaults versioned; profiles chỉ ARO-authored; models/*.manifest.json chỉ reference/license/hash metadata, không weights trong git. locks exact actual runtime/model capability evidence; credentials/video/generated artifacts gitignored.
+
+## Cây mục tiêu với task tạo file
+
+File list dưới đây là đầy đủ cho baseline tasks, cộng infrastructure generated rõ ràng. Packages `__init__.py`, Gradle files/manifest được ghi riêng để repo trống build được. Các paths trong FILES TO MODIFY phải được task trước tạo.
+
+| Path | Owner task |
+|---|---|
+| `.github/workflows/android.yml` | A19 |
+| `.github/workflows/worker.yml` | A01 |
+| `.gitignore` | A01 |
+| `AGENTS.md` | A01 |
+| `LICENSE` | A28 |
+| `Makefile` | A01 |
+| `README.md` | A01 |
+| `THIRD_PARTY_NOTICES.md` | A28 |
+| `android/app/build.gradle.kts` | A19 |
+| `android/app/src/androidTest/java/studio/aro/RecoveryFlowTest.kt` | A26 |
+| `android/app/src/main/AndroidManifest.xml` | A19 |
+| `android/app/src/main/java/studio/aro/MainActivity.kt` | A19 |
+| `android/app/src/main/res/values/strings.xml` | A19 |
+| `android/app/src/main/res/xml/file_paths.xml` | A19 |
+| `android/build.gradle.kts` | A19 |
+| `android/core/database/build.gradle.kts` | A19 |
+| `android/core/database/src/main/AndroidManifest.xml` | A19 |
+| `android/core/database/src/main/java/studio/aro/database/AroDatabase.kt` | A19 |
+| `android/core/database/src/main/java/studio/aro/database/Entities.kt` | A19 |
+| `android/core/drive/build.gradle.kts` | A19 |
+| `android/core/drive/src/main/AndroidManifest.xml` | A19 |
+| `android/core/drive/src/main/java/studio/aro/drive/DriveAuth.kt` | A20 |
+| `android/core/drive/src/main/java/studio/aro/drive/DriveStore.kt` | A20 |
+| `android/core/media/build.gradle.kts` | A19 |
+| `android/core/media/src/main/AndroidManifest.xml` | A19 |
+| `android/core/media/src/main/java/studio/aro/media/DriveDataSource.kt` | A24 |
+| `android/core/media/src/main/java/studio/aro/media/PreviewPlayer.kt` | A24 |
+| `android/core/media/src/test/java/studio/aro/media/PlaybackTest.kt` | A24 |
+| `android/core/model/build.gradle.kts` | A19 |
+| `android/core/model/src/main/AndroidManifest.xml` | A19 |
+| `android/core/model/src/main/java/studio/aro/model/WireModels.kt` | A19 |
+| `android/core/model/src/test/java/studio/aro/model/ContractTest.kt` | A19 |
+| `android/core/sync/build.gradle.kts` | A19 |
+| `android/core/sync/src/main/AndroidManifest.xml` | A19 |
+| `android/core/sync/src/main/java/studio/aro/sync/JobSync.kt` | A21 |
+| `android/core/sync/src/main/java/studio/aro/sync/Outbox.kt` | A20 |
+| `android/core/sync/src/main/java/studio/aro/sync/RevisionMerge.kt` | A23 |
+| `android/core/sync/src/main/java/studio/aro/sync/TransferWorker.kt` | A20 |
+| `android/core/sync/src/test/java/studio/aro/sync/TransferTest.kt` | A20 |
+| `android/feature/editor/build.gradle.kts` | A19 |
+| `android/feature/editor/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/editor/src/main/java/studio/aro/editor/EditHistory.kt` | A23 |
+| `android/feature/editor/src/main/java/studio/aro/editor/EditorViewModel.kt` | A23 |
+| `android/feature/editor/src/main/java/studio/aro/editor/SubtitleEditor.kt` | A23 |
+| `android/feature/editor/src/main/java/studio/aro/editor/Timeline.kt` | A24 |
+| `android/feature/editor/src/test/java/studio/aro/editor/RevisionTest.kt` | A23 |
+| `android/feature/handoff/build.gradle.kts` | A19 |
+| `android/feature/handoff/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/handoff/src/main/java/studio/aro/handoff/HandoffScreen.kt` | A22 |
+| `android/feature/handoff/src/main/java/studio/aro/handoff/HandoffViewModel.kt` | A22 |
+| `android/feature/handoff/src/test/java/studio/aro/handoff/HandoffTest.kt` | A22 |
+| `android/feature/jobs/build.gradle.kts` | A19 |
+| `android/feature/jobs/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/jobs/src/main/java/studio/aro/jobs/JobScreen.kt` | A21 |
+| `android/feature/jobs/src/main/java/studio/aro/jobs/JobViewModel.kt` | A21 |
+| `android/feature/jobs/src/test/java/studio/aro/jobs/JobReducerTest.kt` | A21 |
+| `android/feature/memory/build.gradle.kts` | A19 |
+| `android/feature/memory/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/memory/src/main/java/studio/aro/memory/MemoryScreen.kt` | A24 |
+| `android/feature/outputs/build.gradle.kts` | A19 |
+| `android/feature/outputs/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/outputs/src/main/java/studio/aro/outputs/OutputLibrary.kt` | A24 |
+| `android/feature/projects/build.gradle.kts` | A19 |
+| `android/feature/projects/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/projects/src/main/java/studio/aro/projects/ProjectsScreen.kt` | A20 |
+| `android/feature/settings/build.gradle.kts` | A19 |
+| `android/feature/settings/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/settings/src/main/java/studio/aro/settings/SettingsScreen.kt` | A21 |
+| `android/feature/setup/build.gradle.kts` | A19 |
+| `android/feature/setup/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/setup/src/main/java/studio/aro/setup/PipelineSettings.kt` | A21 |
+| `android/feature/setup/src/main/java/studio/aro/setup/ProjectSetupScreen.kt` | A20 |
+| `android/feature/voices/build.gradle.kts` | A19 |
+| `android/feature/voices/src/main/AndroidManifest.xml` | A19 |
+| `android/feature/voices/src/main/java/studio/aro/voices/VoiceScreen.kt` | A24 |
+| `android/gradle.properties` | A19 |
+| `android/gradle/libs.versions.toml` | A19 |
+| `android/gradle/verification-metadata.xml` | A19 |
+| `android/gradle/wrapper/gradle-wrapper.jar` | A19 |
+| `android/gradle/wrapper/gradle-wrapper.properties` | A19 |
+| `android/gradlew` | A19 |
+| `android/gradlew.bat` | A19 |
+| `android/settings.gradle.kts` | A19 |
+| `assets/fonts/NOTICE.txt` | A16 |
+| `assets/fonts/manifest.json` | A16 |
+| `configs/pipeline.default.json` | A02 |
+| `configs/worker.example.yaml` | A01 |
+| `contracts/fixtures/invalid.json` | A02 |
+| `contracts/fixtures/valid.json` | A02 |
+| `contracts/v1/artifact.schema.json` | A02 |
+| `contracts/v1/common.schema.json` | A02 |
+| `contracts/v1/cue.schema.json` | A02 |
+| `contracts/v1/handoff.schema.json` | A02 |
+| `contracts/v1/job.schema.json` | A02 |
+| `contracts/v1/memory.schema.json` | A02 |
+| `contracts/v1/project.schema.json` | A02 |
+| `contracts/v1/validation.schema.json` | A02 |
+| `docs/adr/0001-baseline.md` | A01 |
+| `docs/architecture/00_REFERENCE_EVIDENCE_MATRIX.md` | A01 |
+| `docs/architecture/01_PRODUCT_BLUEPRINT.md` | A01 |
+| `docs/architecture/02_FINAL_SOURCE_TREE.md` | A01 |
+| `docs/architecture/03_DRIVE_JOB_PROTOCOL.md` | A01 |
+| `docs/architecture/04_CORE_DATA_MODELS.md` | A01 |
+| `docs/architecture/05_WORKER_PIPELINE_SPEC.md` | A01 |
+| `docs/architecture/06_TRANSLATION_MEMORY_SPEC.md` | A01 |
+| `docs/architecture/07_TTS_AUDIO_RENDER_SPEC.md` | A01 |
+| `docs/architecture/08_ANDROID_PRODUCT_SPEC.md` | A01 |
+| `docs/architecture/09_CACHE_RESUME_LONG_VIDEO.md` | A01 |
+| `docs/architecture/10_ARENA_BUILD_BOOK.md` | A01 |
+| `docs/architecture/11_GOLDEN_ACCEPTANCE.md` | A01 |
+| `docs/architecture/12_DEPENDENCY_MODEL_MATRIX.md` | A01 |
+| `docs/architecture/13_UNKNOWN_AND_DECISIONS.md` | A01 |
+| `docs/benchmarks/long-video.md` | A27 |
+| `docs/runbooks/android.md` | A28 |
+| `docs/runbooks/colab.md` | A28 |
+| `docs/runbooks/golden.md` | A18 |
+| `docs/runbooks/recovery.md` | A26 |
+| `docs/runbooks/release.md` | A28 |
+| `locks/diarization-environment.lock` | A25 |
+| `locks/ffmpeg-manifest.json` | A01 |
+| `locks/runtime-profiles.json` | A01 |
+| `locks/tts-environment.lock` | A12 |
+| `models/asr.manifest.json` | A09 |
+| `models/diarization.manifest.json` | A25 |
+| `models/ocr.manifest.json` | A08 |
+| `models/separation.manifest.json` | A14 |
+| `models/tts.manifest.json` | A12 |
+| `models/vad.manifest.json` | A09 |
+| `notebooks/ARO_Colab.ipynb` | A01 |
+| `profiles/genres/historical.yaml` | A10 |
+| `profiles/genres/modern.yaml` | A10 |
+| `profiles/genres/neutral.yaml` | A10 |
+| `profiles/genres/transmigration.yaml` | A10 |
+| `profiles/genres/wuxia.yaml` | A10 |
+| `profiles/genres/xianxia.yaml` | A10 |
+| `release/manifest.schema.json` | A28 |
+| `scripts/package_release.py` | A28 |
+| `tests/benchmarks/cases.json` | A27 |
+| `tests/benchmarks/long_video.py` | A27 |
+| `tests/golden/cases/donghua-001/case.json` | A18 |
+| `tests/golden/report.schema.json` | A18 |
+| `tests/golden/run_case.py` | A18 |
+| `worker/pyproject.toml` | A01 |
+| `worker/src/aro_worker/__init__.py` | A01 |
+| `worker/src/aro_worker/asr/__init__.py` | A09 |
+| `worker/src/aro_worker/asr/base.py` | A09 |
+| `worker/src/aro_worker/asr/chunks.py` | A09 |
+| `worker/src/aro_worker/asr/stitch.py` | A09 |
+| `worker/src/aro_worker/asr/vad.py` | A09 |
+| `worker/src/aro_worker/asr/whisper.py` | A09 |
+| `worker/src/aro_worker/audio/__init__.py` | A14 |
+| `worker/src/aro_worker/audio/background.py` | A14 |
+| `worker/src/aro_worker/audio/ducking.py` | A15 |
+| `worker/src/aro_worker/audio/loudness.py` | A15 |
+| `worker/src/aro_worker/audio/mix.py` | A15 |
+| `worker/src/aro_worker/audio/separation.py` | A14 |
+| `worker/src/aro_worker/audio/voice_track.py` | A15 |
+| `worker/src/aro_worker/cache/__init__.py` | A05 |
+| `worker/src/aro_worker/cache/gc.py` | A05 |
+| `worker/src/aro_worker/cache/invalidation.py` | A05 |
+| `worker/src/aro_worker/cache/keys.py` | A05 |
+| `worker/src/aro_worker/cache/packs.py` | A26 |
+| `worker/src/aro_worker/cache/store.py` | A05 |
+| `worker/src/aro_worker/cli.py` | A01 |
+| `worker/src/aro_worker/core/__init__.py` | A01 |
+| `worker/src/aro_worker/core/cancel.py` | A05 |
+| `worker/src/aro_worker/core/canonical.py` | A02 |
+| `worker/src/aro_worker/core/config.py` | A02 |
+| `worker/src/aro_worker/core/doctor.py` | A01 |
+| `worker/src/aro_worker/core/errors.py` | A02 |
+| `worker/src/aro_worker/core/models.py` | A02 |
+| `worker/src/aro_worker/core/resources.py` | A05 |
+| `worker/src/aro_worker/core/runner.py` | A05 |
+| `worker/src/aro_worker/core/stage.py` | A05 |
+| `worker/src/aro_worker/diarization/__init__.py` | A25 |
+| `worker/src/aro_worker/diarization/assignment.py` | A25 |
+| `worker/src/aro_worker/diarization/base.py` | A25 |
+| `worker/src/aro_worker/diarization/pyannote.py` | A25 |
+| `worker/src/aro_worker/jobs/__init__.py` | A04 |
+| `worker/src/aro_worker/jobs/commands.py` | A04 |
+| `worker/src/aro_worker/jobs/controller.py` | A04 |
+| `worker/src/aro_worker/jobs/events.py` | A04 |
+| `worker/src/aro_worker/jobs/lease.py` | A04 |
+| `worker/src/aro_worker/jobs/publish.py` | A17 |
+| `worker/src/aro_worker/jobs/recovery.py` | A04 |
+| `worker/src/aro_worker/jobs/reducer.py` | A04 |
+| `worker/src/aro_worker/media/__init__.py` | A06 |
+| `worker/src/aro_worker/media/extract.py` | A06 |
+| `worker/src/aro_worker/media/fixtures.py` | A06 |
+| `worker/src/aro_worker/media/probe.py` | A06 |
+| `worker/src/aro_worker/media/process.py` | A06 |
+| `worker/src/aro_worker/media/timeline.py` | A06 |
+| `worker/src/aro_worker/media/waveform.py` | A24 |
+| `worker/src/aro_worker/memory/__init__.py` | A10 |
+| `worker/src/aro_worker/memory/context.py` | A10 |
+| `worker/src/aro_worker/memory/match.py` | A10 |
+| `worker/src/aro_worker/memory/proposals.py` | A10 |
+| `worker/src/aro_worker/memory/store.py` | A10 |
+| `worker/src/aro_worker/ocr/__init__.py` | A08 |
+| `worker/src/aro_worker/ocr/engine.py` | A08 |
+| `worker/src/aro_worker/ocr/rapidocr.py` | A08 |
+| `worker/src/aro_worker/ocr/roi.py` | A08 |
+| `worker/src/aro_worker/ocr/sampling.py` | A08 |
+| `worker/src/aro_worker/ocr/temporal.py` | A08 |
+| `worker/src/aro_worker/render/__init__.py` | A16 |
+| `worker/src/aro_worker/render/ass.py` | A16 |
+| `worker/src/aro_worker/render/canvas.py` | A16 |
+| `worker/src/aro_worker/render/encoder.py` | A16 |
+| `worker/src/aro_worker/render/export.py` | A16 |
+| `worker/src/aro_worker/render/filters.py` | A16 |
+| `worker/src/aro_worker/render/fonts.py` | A16 |
+| `worker/src/aro_worker/render/preview.py` | A16 |
+| `worker/src/aro_worker/storage/__init__.py` | A03 |
+| `worker/src/aro_worker/storage/artifacts.py` | A05 |
+| `worker/src/aro_worker/storage/base.py` | A03 |
+| `worker/src/aro_worker/storage/drive.py` | A03 |
+| `worker/src/aro_worker/storage/fake_drive.py` | A03 |
+| `worker/src/aro_worker/storage/local.py` | A03 |
+| `worker/src/aro_worker/storage/uploads.py` | A03 |
+| `worker/src/aro_worker/subtitle/__init__.py` | A07 |
+| `worker/src/aro_worker/subtitle/embedded.py` | A07 |
+| `worker/src/aro_worker/subtitle/lineage.py` | A07 |
+| `worker/src/aro_worker/subtitle/normalize.py` | A07 |
+| `worker/src/aro_worker/subtitle/readability.py` | A11 |
+| `worker/src/aro_worker/subtitle/source.py` | A07 |
+| `worker/src/aro_worker/subtitle/srt.py` | A07 |
+| `worker/src/aro_worker/translation/__init__.py` | A10 |
+| `worker/src/aro_worker/translation/base.py` | A10 |
+| `worker/src/aro_worker/translation/batches.py` | A10 |
+| `worker/src/aro_worker/translation/handoff.py` | A11 |
+| `worker/src/aro_worker/translation/parser.py` | A10 |
+| `worker/src/aro_worker/translation/pipeline.py` | A10 |
+| `worker/src/aro_worker/translation/polish.py` | A11 |
+| `worker/src/aro_worker/translation/prompts.py` | A10 |
+| `worker/src/aro_worker/translation/providers/__init__.py` | A10 |
+| `worker/src/aro_worker/translation/providers/gemini_api.py` | A10 |
+| `worker/src/aro_worker/translation/providers/manual_gemini.py` | A11 |
+| `worker/src/aro_worker/translation/providers/openai_compat.py` | A10 |
+| `worker/src/aro_worker/translation/retry.py` | A10 |
+| `worker/src/aro_worker/translation/validator.py` | A10 |
+| `worker/src/aro_worker/tts/__init__.py` | A12 |
+| `worker/src/aro_worker/tts/base.py` | A12 |
+| `worker/src/aro_worker/tts/catalogue.py` | A12 |
+| `worker/src/aro_worker/tts/edge.py` | A12 |
+| `worker/src/aro_worker/tts/fit.py` | A13 |
+| `worker/src/aro_worker/tts/normalize.py` | A12 |
+| `worker/src/aro_worker/tts/rewrite.py` | A13 |
+| `worker/src/aro_worker/tts/synthesis.py` | A12 |
+| `worker/src/aro_worker/tts/vieneu.py` | A12 |
+| `worker/src/aro_worker/tts/windows.py` | A13 |
+| `worker/src/aro_worker/validation/__init__.py` | A17 |
+| `worker/src/aro_worker/validation/audio.py` | A17 |
+| `worker/src/aro_worker/validation/coverage.py` | A17 |
+| `worker/src/aro_worker/validation/report.py` | A17 |
+| `worker/src/aro_worker/validation/video.py` | A17 |
+| `worker/tests/chaos/test_fault_matrix.py` | A26 |
+| `worker/tests/integration/test_attempt_fencing.py` | A04 |
+| `worker/tests/integration/test_drive.py` | A03 |
+| `worker/tests/integration/test_manual_handoff.py` | A11 |
+| `worker/tests/integration/test_publish_recovery.py` | A17 |
+| `worker/tests/integration/test_runner_recovery.py` | A05 |
+| `worker/tests/media/test_asr.py` | A09 |
+| `worker/tests/media/test_diarization.py` | A25 |
+| `worker/tests/media/test_final_validation.py` | A17 |
+| `worker/tests/media/test_media.py` | A06 |
+| `worker/tests/media/test_mix.py` | A15 |
+| `worker/tests/media/test_ocr.py` | A08 |
+| `worker/tests/media/test_preview_waveform.py` | A24 |
+| `worker/tests/media/test_render.py` | A16 |
+| `worker/tests/media/test_separation.py` | A14 |
+| `worker/tests/media/test_subtitle_sources.py` | A07 |
+| `worker/tests/media/test_tts_engines.py` | A12 |
+| `worker/tests/media/test_tts_fit.py` | A13 |
+| `worker/tests/unit/test_asr_stitch.py` | A09 |
+| `worker/tests/unit/test_cache_graph.py` | A05 |
+| `worker/tests/unit/test_canonical.py` | A02 |
+| `worker/tests/unit/test_contracts.py` | A02 |
+| `worker/tests/unit/test_cue_edits.py` | A07 |
+| `worker/tests/unit/test_job_protocol.py` | A04 |
+| `worker/tests/unit/test_ocr_temporal.py` | A08 |
+| `worker/tests/unit/test_readability.py` | A11 |
+| `worker/tests/unit/test_storage_faults.py` | A03 |
+| `worker/tests/unit/test_translation.py` | A10 |
+| `worker/uv.lock` | A01 |
+
+## Runtime và artifacts ngoài source tree
+
+`artifacts/Axx/` là evidence local/CI, không source requirement input; upload evidence quan trọng tới project Drive. `release/<version>/` chứa wheel/APK/AAB/manifest/SHA256SUMS/SBOM, generated. `.venv`, `.gradle`, `build`, models weights, scratch audio/video, provider keys, auth/session files, upload session URIs và `.env` vào .gitignore. Notebook runtime cache ở `/content/aro-scratch/<attempt_id>/`; Linux CLI scratch configurable; không hardcode Windows paths.
+
+`tests/golden` nằm repo root vì orchestration cross-runtime; `worker/tests/{unit,media,integration,chaos}` test worker package; Android unit/androidTest trong module tương ứng. Golden case JSON chỉ public metadata/file IDs, media dùng private Drive và không là artifact từ đối thủ.
+
+## Command surface dự kiến
+
+`aro doctor --json`; `aro worker run --workspace-id ID`; `aro project create`; `aro job submit/assign/status/resume/retry/cancel`; `aro handoff export/import`; `aro cues import/review`; `aro memory import`; `aro validate result`. Parser rejects unimplemented subcommands trong early milestones, không return fake success. CLI controller có cùng command schema với Android.
+
+Root Makefile orchestrates `lint`, `contracts`, `unit`, `media`, `golden CASE=...`, `release`; commands fail khi required gate NOT_RUN. CI worker không tự gọi paid provider. GPU/model/Drive live integration suite chạy explicit environment đã cấu hình và giữ sanitized reports.
+
+## Extension boundary
+
+Task A24 bổ sung auxiliary job request operation PREVIEW/AUDITION/WAVEFORM bằng schema minor1.1 + required_features, là planned additive extension của v1.0 main FINAL flow. A24 phải cập nhật job schema/DTO/fixtures và capability negotiation cùng commit; worker/app cũ reject unsupported feature, không silently treat preview as FINAL. Nếu taskbook/dạng file tên thay đổi phải cập nhật mapping và imports trong02/10 cùng nhau.

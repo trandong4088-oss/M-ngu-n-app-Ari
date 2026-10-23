@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-10-23T07:07:00Z",
+  "profiles": {
+    "cpu-host": {
+      "name": "Linux CPU Host (Baseline/Dev)",
+      "device": "cpu",
+      "cuda_available": false,
+      "asr": {
+        "engine": "faster-whisper",
+        "compute_type": "int8",
+        "threads": 4
+      },
+      "ocr": {
+        "engine": "rapidocr",
+        "device": "cpu"
+      },
+      "tts": {
+        "primary": "vieneu",
+        "fallback": "edge",
+        "device": "cpu"
+      },
+      "separation": {
+        "mode": "duck_original",
+        "reason": "UVR requires CUDA GPU for reasonable RTF"
+      },
+      "render": {
+        "video_encoder": "libx264",
+        "preset": "fast"
+      }
+    },
+    "cuda-colab-t4": {
+      "name": "Google Colab T4 (16GB VRAM)",
+      "device": "cuda",
+      "cuda_available": true,
+      "expected_min_vram_gb": 14.5,
+      "asr": {
+        "engine": "faster-whisper",
+        "model_size": "large-v3-turbo",
+        "compute_type": "float16",
+        "device_index": 0
+      },
+      "ocr": {
+        "engine": "rapidocr",
+        "device": "cuda"
+      },
+      "tts": {
+        "primary": "vieneu",
+        "fallback": "edge",
+        "device": "cuda"
+      },
+      "separation": {
+        "mode": "uvr",
+        "model": "UVR-MDX-NET-Inst_HQ_4",
+        "fallback": "duck_original"
+      },
+      "render": {
+        "video_encoder": "libx264",
+        "preset": "medium"
+      }
+    }
+  }
+}

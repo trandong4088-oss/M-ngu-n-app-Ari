@@ -6,3 +6,42 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Python & Virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# uv
+.uv/
+
+# Media, Secrets, and Scratch Artifacts (Rule: Never commit credentials, models weights, or private media)
+*.mp4
+*.mkv
+*.wav
+*.mp3
+*.onnx
+*.bin
+*.pt
+*.safetensors
+credentials.json
+token.json
+client_secrets.json
+scratch/
+artifacts/*/media/
+worker/scratch/
+
+# Android build outputs
+.gradle/
+*.apk
+*.aab
+local.properties
+

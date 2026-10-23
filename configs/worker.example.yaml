@@ -1,0 +1,79 @@
+# ARO Studio Worker Configuration Example
+# File: configs/worker.example.yaml
+
+schema_version: "1.0"
+
+# Cấu hình định danh và phiên làm việc
+worker:
+  worker_name: "aro-worker-linux-01"
+  poll_interval_seconds: 10
+  heartbeat_interval_seconds: 30
+  scratch_directory: "./scratch"
+  device_preference: "auto" # auto | cuda | cpu
+
+# Tích hợp Google Drive
+drive:
+  enabled: true
+  workspace_drive_folder_id: "" # Điền Google Drive Folder ID của /AroStudio
+  credentials_file: ""          # Đường dẫn credentials.json (nếu dùng service account)
+  request_timeout_seconds: 60
+  max_retry_attempts: 5
+
+# Cấu hình các giai đoạn xử lý (Pipeline Stages)
+stages:
+  probe:
+    ffprobe_path: "ffprobe"
+  
+  audio_extract:
+    ffmpeg_path: "ffmpeg"
+    asr_sample_rate: 16000
+    mix_sample_rate: 48000
+  
+  ocr:
+    enabled: true
+    engine: "rapidocr"
+    roi_detection: "auto"
+    confidence_threshold: 0.65
+  
+  asr:
+    enabled: true
+    engine: "faster-whisper"
+    model_size: "large-v3-turbo"
+    device: "auto" # cuda | cpu
+    compute_type: "int8"
+    language: "zh"
+    vad_filter: true
+  
+  translation:
+    primary_provider: "manual_gemini" # manual_gemini | gemini_api | openai_compatible
+    batch_size_cues: 20
+    max_retries: 2
+    character_bible_enabled: true
+    glossary_enabled: true
+  
+  tts:
+    primary_engine: "vieneu" # vieneu | edge
+    fallback_engine: "edge"
+    sample_rate: 48000
+    speed_factor: 1.0
+    audio_fit:
+      max_rewrites: 2
+      max_atempo: 1.20
+  
+  audio:
+    separation_mode: "duck_original" # duck_original | uvr
+    ducking:
+      duck_level_db: -18
+      fade_in_ms: 120
+      fade_out_ms: 180
+    master_loudness:
+      target_lufs: -16.0
+      true_peak_db: -1.0
+  
+  render:
+    video_codec: "libx264"
+    preset: "fast"
+    crf: 22
+    audio_codec: "aac"
+    audio_bitrate: "192k"
+    burn_subtitles: true

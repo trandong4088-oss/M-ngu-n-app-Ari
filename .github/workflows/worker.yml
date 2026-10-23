@@ -1,0 +1,41 @@
+name: Worker CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (FFmpeg with libass)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libass-dev
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install worker dependencies
+        run: |
+          cd worker
+          uv sync
+
+      - name: Run aro doctor check
+        run: |
+          cd worker
+          uv run aro doctor --json
+
+      - name: Run Makefile test targets
+        run: |
+          make doctor-check

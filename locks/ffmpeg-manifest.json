@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "name": "ffmpeg-manifest",
+  "generated_at": "2026-10-23T07:07:00Z",
+  "environment": "linux-x86_64",
+  "binary_info": {
+    "version": "4.4.2-0ubuntu0.22.04.1+esm17",
+    "compiler": "gcc 11 (Ubuntu 11.4.0-1ubuntu1~22.04.3)",
+    "license": "GPL version 2 or later",
+    "required_libraries": [
+      "libass",
+      "libx264",
+      "libsoxr",
+      "libmp3lame",
+      "libopus"
+    ]
+  },
+  "required_filters": {
+    "loudnorm": {
+      "verified": true,
+      "purpose": "EBU R128 2-pass master loudness normalization (-16 LUFS)"
+    },
+    "sidechaincompress": {
+      "verified": true,
+      "purpose": "Audio ducking for original background under voice track"
+    },
+    "ass": {
+      "verified": true,
+      "purpose": "Advanced SSA / ASS burn-in rendering"
+    },
+    "subtitles": {
+      "verified": true,
+      "purpose": "SubRip SRT burn-in rendering fallback"
+    }
+  },
+  "required_codecs": {
+    "video_encoders": ["libx264"],
+    "audio_encoders": ["aac", "libmp3lame"],
+    "audio_decoders": ["aac", "mp3", "flac", "pcm_s16le", "pcm_f32le"]
+  },
+  "status": "VERIFIED_FOR_HOST"
+}

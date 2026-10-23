@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aro-worker"
+version = "0.1.0"
+description = "ARO Studio Python Worker Pipeline for Video, Subtitles, TTS & Dubbing"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "ARO Studio Team" }
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "pydantic>=2.7.0",
+]
+
+[project.scripts]
+aro = "aro_worker.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aro_worker"]
