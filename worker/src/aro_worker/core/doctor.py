@@ -1,6 +1,6 @@
 """
 ARO Studio Worker — Environment Doctor
-Performs environment, hardware, FFmpeg, and capability diagnosis.
+Performs environment, hardware, FFmpeg, and capability diagnosis against project specifications.
 """
 
 from __future__ import annotations
@@ -12,7 +12,35 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+
+DEFAULT_SPEC = {
+    "min_version": "4.4.0",
+    "required_filters": ["loudnorm", "sidechaincompress", "ass", "subtitles"],
+    "required_video_encoders": ["libx264"],
+    "required_audio_encoders": ["aac"],
+    "required_audio_decoders": ["aac", "mp3", "flac", "pcm_s16le", "pcm_f32le"],
+}
+
+
+def load_ffmpeg_specification() -> Dict[str, Any]:
+    """Load project requirements from locks/ffmpeg-manifest.json or fallback to defaults."""
+    manifest_paths = [
+        Path("locks/ffmpeg-manifest.json"),
+        Path("../locks/ffmpeg-manifest.json"),
+        Path(__file__).resolve().parent.parent.parent.parent.parent / "locks" / "ffmpeg-manifest.json",
+    ]
+    for p in manifest_paths:
+        if p.is_file():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data.get("specification", DEFAULT_SPEC)
+            except Exception:
+                pass
+    return DEFAULT_SPEC
 
 
 def check_python() -> Dict[str, Any]:
@@ -54,94 +82,210 @@ def check_disk_space(path: str = ".") -> Dict[str, Any]:
         }
 
 
-def check_ffmpeg() -> Dict[str, Any]:
-    ffmpeg_bin = shutil.which("ffmpeg")
-    ffprobe_bin = shutil.which("ffprobe")
+def check_ffmpeg_binaries(
+    ffmpeg_cmd: Optional[str] = None, ffprobe_cmd: Optional[str] = None
+) -> Dict[str, Any]:
+    """Check availability and execution return codes of ffmpeg and ffprobe binaries."""
+    ffmpeg_bin = ffmpeg_cmd or shutil.which("ffmpeg")
+    ffprobe_bin = ffprobe_cmd or shutil.which("ffprobe")
 
     if not ffmpeg_bin:
         return {
-            "name": "ffmpeg_binary",
+            "name": "ffmpeg_binaries",
             "category": "media",
             "status": "FAIL",
-            "path": None,
+            "ffmpeg_path": None,
+            "ffprobe_path": None,
             "version": None,
             "detail": "ffmpeg binary not found in PATH",
-            "actionable_reason": "Install FFmpeg using 'sudo apt install ffmpeg' or install static binary.",
+            "actionable_reason": "Install FFmpeg using 'sudo apt install ffmpeg' or ensure ffmpeg/ffprobe are in PATH.",
         }
 
+    # Verify ffmpeg execution and return code
     try:
-        res = subprocess.run([ffmpeg_bin, "-version"], capture_output=True, text=True, timeout=5)
-        first_line = res.stdout.splitlines()[0] if res.stdout else "unknown"
-        has_ffprobe = ffprobe_bin is not None
-        status = "PASS" if has_ffprobe else "FAIL"
-        reason = None if has_ffprobe else "ffprobe binary not found in PATH."
-        return {
-            "name": "ffmpeg_binary",
-            "category": "media",
-            "status": status,
-            "ffmpeg_path": ffmpeg_bin,
-            "ffprobe_path": ffprobe_bin,
-            "version_line": first_line,
-            "detail": first_line,
-            "actionable_reason": reason,
-        }
+        res_ffmpeg = subprocess.run([ffmpeg_bin, "-version"], capture_output=True, text=True, timeout=5)
+        if res_ffmpeg.returncode != 0:
+            return {
+                "name": "ffmpeg_binaries",
+                "category": "media",
+                "status": "FAIL",
+                "detail": f"ffmpeg -version returned non-zero exit code: {res_ffmpeg.returncode}",
+                "actionable_reason": f"ffmpeg command failed with stderr: {res_ffmpeg.stderr.strip()}",
+            }
+        first_line = res_ffmpeg.stdout.splitlines()[0] if res_ffmpeg.stdout else "unknown"
     except Exception as exc:
         return {
-            "name": "ffmpeg_binary",
+            "name": "ffmpeg_binaries",
             "category": "media",
             "status": "FAIL",
             "detail": str(exc),
             "actionable_reason": f"Error executing ffmpeg: {exc}",
         }
 
-
-def check_ffmpeg_filters() -> Dict[str, Any]:
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if not ffmpeg_bin:
+    # Verify ffprobe execution and return code
+    if not ffprobe_bin:
         return {
-            "name": "ffmpeg_filters",
+            "name": "ffmpeg_binaries",
             "category": "media",
-            "status": "BLOCKED",
-            "detail": "FFmpeg not available",
-            "actionable_reason": "Install FFmpeg before verifying audio/video filters.",
+            "status": "FAIL",
+            "ffmpeg_path": ffmpeg_bin,
+            "ffprobe_path": None,
+            "version": first_line,
+            "detail": "ffprobe binary not found in PATH (ffmpeg is present).",
+            "actionable_reason": "Install ffprobe (part of ffmpeg package) to inspect media streams.",
         }
 
     try:
-        res = subprocess.run([ffmpeg_bin, "-filters"], capture_output=True, text=True, timeout=5)
-        filters_output = res.stdout + res.stderr
-        required_filters = ["loudnorm", "sidechaincompress", "ass", "subtitles"]
-        missing = [f for f in required_filters if f not in filters_output]
-
-        if not missing:
+        res_ffprobe = subprocess.run([ffprobe_bin, "-version"], capture_output=True, text=True, timeout=5)
+        if res_ffprobe.returncode != 0:
             return {
-                "name": "ffmpeg_filters",
-                "category": "media",
-                "status": "PASS",
-                "verified_filters": required_filters,
-                "detail": "All required filters (loudnorm, sidechaincompress, ass, subtitles) verified.",
-                "actionable_reason": None,
-            }
-        else:
-            return {
-                "name": "ffmpeg_filters",
+                "name": "ffmpeg_binaries",
                 "category": "media",
                 "status": "FAIL",
-                "missing_filters": missing,
-                "detail": f"Missing required FFmpeg filters: {', '.join(missing)}",
-                "actionable_reason": f"FFmpeg build is missing: {', '.join(missing)}. Recompile FFmpeg with --enable-libass.",
+                "detail": f"ffprobe -version returned non-zero exit code: {res_ffprobe.returncode}",
+                "actionable_reason": f"ffprobe command failed with stderr: {res_ffprobe.stderr.strip()}",
             }
     except Exception as exc:
         return {
-            "name": "ffmpeg_filters",
+            "name": "ffmpeg_binaries",
             "category": "media",
             "status": "FAIL",
             "detail": str(exc),
-            "actionable_reason": f"Failed to inspect FFmpeg filters: {exc}",
+            "actionable_reason": f"Error executing ffprobe: {exc}",
+        }
+
+    return {
+        "name": "ffmpeg_binaries",
+        "category": "media",
+        "status": "PASS",
+        "ffmpeg_path": ffmpeg_bin,
+        "ffprobe_path": ffprobe_bin,
+        "version_line": first_line,
+        "detail": first_line,
+        "actionable_reason": None,
+    }
+
+
+def check_ffmpeg_capabilities(
+    ffmpeg_cmd: Optional[str] = None, spec: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Compare actual host FFmpeg filters, encoders, and decoders against the project specification.
+    Verifies command execution return codes.
+    """
+    ffmpeg_bin = ffmpeg_cmd or shutil.which("ffmpeg")
+    if not ffmpeg_bin:
+        return {
+            "name": "ffmpeg_capabilities",
+            "category": "media",
+            "status": "BLOCKED",
+            "detail": "FFmpeg not available",
+            "actionable_reason": "Install FFmpeg before verifying capabilities against specification.",
+        }
+
+    spec = spec or load_ffmpeg_specification()
+    required_filters = spec.get("required_filters", [])
+    required_video_encoders = spec.get("required_video_encoders", [])
+    required_audio_encoders = spec.get("required_audio_encoders", [])
+    required_audio_decoders = spec.get("required_audio_decoders", [])
+
+    missing_items: List[str] = []
+
+    # 1. Check Filters
+    try:
+        res_filters = subprocess.run([ffmpeg_bin, "-filters"], capture_output=True, text=True, timeout=5)
+        if res_filters.returncode != 0:
+            return {
+                "name": "ffmpeg_capabilities",
+                "category": "media",
+                "status": "FAIL",
+                "detail": f"ffmpeg -filters returned exit code {res_filters.returncode}",
+                "actionable_reason": "Failed to inspect FFmpeg filters.",
+            }
+        filters_output = res_filters.stdout + res_filters.stderr
+        for flt in required_filters:
+            if flt not in filters_output:
+                missing_items.append(f"filter:{flt}")
+    except Exception as exc:
+        return {
+            "name": "ffmpeg_capabilities",
+            "category": "media",
+            "status": "FAIL",
+            "detail": str(exc),
+            "actionable_reason": f"Error running ffmpeg -filters: {exc}",
+        }
+
+    # 2. Check Encoders
+    try:
+        res_enc = subprocess.run([ffmpeg_bin, "-encoders"], capture_output=True, text=True, timeout=5)
+        if res_enc.returncode != 0:
+            return {
+                "name": "ffmpeg_capabilities",
+                "category": "media",
+                "status": "FAIL",
+                "detail": f"ffmpeg -encoders returned exit code {res_enc.returncode}",
+                "actionable_reason": "Failed to inspect FFmpeg encoders.",
+            }
+        encoders_output = res_enc.stdout + res_enc.stderr
+        for enc in required_video_encoders + required_audio_encoders:
+            if enc not in encoders_output:
+                missing_items.append(f"encoder:{enc}")
+    except Exception as exc:
+        return {
+            "name": "ffmpeg_capabilities",
+            "category": "media",
+            "status": "FAIL",
+            "detail": str(exc),
+            "actionable_reason": f"Error running ffmpeg -encoders: {exc}",
+        }
+
+    # 3. Check Decoders
+    try:
+        res_dec = subprocess.run([ffmpeg_bin, "-decoders"], capture_output=True, text=True, timeout=5)
+        if res_dec.returncode != 0:
+            return {
+                "name": "ffmpeg_capabilities",
+                "category": "media",
+                "status": "FAIL",
+                "detail": f"ffmpeg -decoders returned exit code {res_dec.returncode}",
+                "actionable_reason": "Failed to inspect FFmpeg decoders.",
+            }
+        decoders_output = res_dec.stdout + res_dec.stderr
+        for dec in required_audio_decoders:
+            if dec not in decoders_output:
+                missing_items.append(f"decoder:{dec}")
+    except Exception as exc:
+        return {
+            "name": "ffmpeg_capabilities",
+            "category": "media",
+            "status": "FAIL",
+            "detail": str(exc),
+            "actionable_reason": f"Error running ffmpeg -decoders: {exc}",
+        }
+
+    if not missing_items:
+        return {
+            "name": "ffmpeg_capabilities",
+            "category": "media",
+            "status": "PASS",
+            "verified_filters": required_filters,
+            "verified_encoders": required_video_encoders + required_audio_encoders,
+            "verified_decoders": required_audio_decoders,
+            "detail": "Host FFmpeg satisfies all project requirements (filters, encoders, decoders).",
+            "actionable_reason": None,
+        }
+    else:
+        return {
+            "name": "ffmpeg_capabilities",
+            "category": "media",
+            "status": "FAIL",
+            "missing_items": missing_items,
+            "detail": f"Host FFmpeg is missing required capabilities: {', '.join(missing_items)}",
+            "actionable_reason": f"Missing components: {', '.join(missing_items)}. Recompile or install an FFmpeg build with libass and libx264 enabled.",
         }
 
 
 def check_gpu() -> Dict[str, Any]:
-    # Check nvidia-smi
     nvidia_smi = shutil.which("nvidia-smi")
     if not nvidia_smi:
         return {
@@ -155,8 +299,12 @@ def check_gpu() -> Dict[str, Any]:
         }
 
     try:
-        res = subprocess.run([nvidia_smi, "--query-gpu=name,memory.total", "--format=csv,noheader"],
-                             capture_output=True, text=True, timeout=5)
+        res = subprocess.run(
+            [nvidia_smi, "--query-gpu=name,memory.total", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
         if res.returncode == 0 and res.stdout.strip():
             gpu_info = res.stdout.strip().splitlines()[0]
             return {
@@ -186,8 +334,8 @@ def diagnose() -> Dict[str, Any]:
     checks = [
         check_python(),
         check_disk_space(),
-        check_ffmpeg(),
-        check_ffmpeg_filters(),
+        check_ffmpeg_binaries(),
+        check_ffmpeg_capabilities(),
         check_gpu(),
     ]
 
@@ -196,14 +344,15 @@ def diagnose() -> Dict[str, Any]:
 
     overall_status = "FAILED" if has_fail else ("DEGRADED" if has_blocked else "READY")
 
+    # In Task A01, ONLY baseline CLI and doctor are implemented.
+    # We DO NOT claim audio_extract_cpu, ffmpeg_loudnorm_cpu, or any unbuilt media logic.
     supported_features: List[str] = []
+    if not has_fail:
+        supported_features.extend(["cli", "doctor"])
+
     blocked_reasons: Dict[str, str] = {}
 
-    # Basic baseline CLI and probe
-    if not has_fail:
-        supported_features.extend(["cli", "doctor", "audio_extract_cpu", "ffmpeg_loudnorm_cpu"])
-
-    # GPU check
+    # Hardware status
     gpu_check = next((c for c in checks if c["name"] == "cuda_gpu"), None)
     if gpu_check and gpu_check.get("cuda_available"):
         supported_features.append("cuda_acceleration")
@@ -211,13 +360,17 @@ def diagnose() -> Dict[str, Any]:
         blocked_reasons["cuda_acceleration"] = "NVIDIA CUDA GPU not detected; running in CPU fallback mode."
         blocked_reasons["uvr_separation"] = "UVR vocal separation requires CUDA GPU; duck_original mode will be used."
 
-    # Stage capabilities (to be implemented in subsequent tasks A02 - A18)
-    blocked_reasons["contracts_v1"] = "Scheduled for implementation in Task A02."
-    blocked_reasons["drive_adapter"] = "Scheduled for implementation in Task A03."
-    blocked_reasons["ocr_hardsub"] = "Scheduled for implementation in Task A08."
-    blocked_reasons["asr_whisper"] = "Scheduled for implementation in Task A09."
-    blocked_reasons["tts_vieneu"] = "Scheduled for implementation in Task A12."
-    blocked_reasons["render_pipeline"] = "Scheduled for implementation in Task A16."
+    # Stage capabilities explicitly marked as pending implementation per taskbook
+    blocked_reasons["contracts_v1"] = "Scheduled for implementation in Task A02 (Contracts and shared fixtures)."
+    blocked_reasons["drive_adapter"] = "Scheduled for implementation in Task A03 (Drive storage adapter thực)."
+    blocked_reasons["jobs_fencing"] = "Scheduled for implementation in Task A04 (Controller, jobs và fencing)."
+    blocked_reasons["audio_extract_cpu"] = "Scheduled for implementation in Task A06 (FFmpeg wrapper, probe và audio extract)."
+    blocked_reasons["ocr_hardsub"] = "Scheduled for implementation in Task A08 (OCR hardsub adapter)."
+    blocked_reasons["asr_whisper"] = "Scheduled for implementation in Task A09 (ASR chunking, VAD và merge)."
+    blocked_reasons["translation_engine"] = "Scheduled for implementation in Task A10/A11 (Memory/glossary & Gemini handoff)."
+    blocked_reasons["tts_engine"] = "Scheduled for implementation in Task A12 (VieNeu và Edge TTS adapters)."
+    blocked_reasons["ffmpeg_loudnorm_cpu"] = "Scheduled for implementation in Task A15 (Voice timeline, ducking và loudnorm)."
+    blocked_reasons["render_pipeline"] = "Scheduled for implementation in Task A16 (ASS và video render)."
 
     return {
         "schema_version": "1.0",
@@ -242,20 +395,18 @@ def run_doctor(output_json: bool = False, check_mode: bool = False) -> int:
         print("Checks:")
         for c in report["checks"]:
             status_tag = f"[{c['status']}]"
-            print(f"  {status_tag:<8} {c['name']:<20}: {c['detail']}")
+            print(f"  {status_tag:<8} {c['name']:<22}: {c['detail']}")
             if c.get("actionable_reason") and c["status"] != "PASS":
                 print(f"           -> Note: {c['actionable_reason']}")
 
-        print("\nSupported Features:")
+        print("\nSupported Features (A01 Baseline):")
         for sf in report["supported_features"]:
             print(f"  + {sf}")
 
-        print("\nBlocked / Pending Tasks:")
+        print("\nBlocked / Pending Tasks (A02–A28 Roadmap):")
         for feat, reason in report["blocked_reasons"].items():
-            print(f"  - {feat:<20}: {reason}")
+            print(f"  - {feat:<22}: {reason}")
 
-    # Return code logic:
-    # If check_mode is set, fail if overall_status == "FAILED"
     if check_mode and report["overall_status"] == "FAILED":
         return 1
     return 0

@@ -1,42 +1,29 @@
 {
   "schema_version": "1.0",
   "name": "ffmpeg-manifest",
-  "generated_at": "2026-10-23T07:07:00Z",
-  "environment": "linux-x86_64",
-  "binary_info": {
-    "version": "4.4.2-0ubuntu0.22.04.1+esm17",
-    "compiler": "gcc 11 (Ubuntu 11.4.0-1ubuntu1~22.04.3)",
-    "license": "GPL version 2 or later",
-    "required_libraries": [
-      "libass",
-      "libx264",
-      "libsoxr",
-      "libmp3lame",
-      "libopus"
+  "specification": {
+    "min_version": "4.4.0",
+    "recommended_version": "7.1.1",
+    "description": "Project specification for FFmpeg capabilities across development, CI, and production environments. Host version varies by environment (e.g. Ubuntu 22.04 LTS provides 4.4.2, CI ubuntu-latest / Debian bookworm provides 6.x or newer). Compliance is verified against required filters and codecs.",
+    "required_filters": [
+      "loudnorm",
+      "sidechaincompress",
+      "ass",
+      "subtitles"
+    ],
+    "required_video_encoders": [
+      "libx264"
+    ],
+    "required_audio_encoders": [
+      "aac"
+    ],
+    "required_audio_decoders": [
+      "aac",
+      "mp3",
+      "flac",
+      "pcm_s16le",
+      "pcm_f32le"
     ]
   },
-  "required_filters": {
-    "loudnorm": {
-      "verified": true,
-      "purpose": "EBU R128 2-pass master loudness normalization (-16 LUFS)"
-    },
-    "sidechaincompress": {
-      "verified": true,
-      "purpose": "Audio ducking for original background under voice track"
-    },
-    "ass": {
-      "verified": true,
-      "purpose": "Advanced SSA / ASS burn-in rendering"
-    },
-    "subtitles": {
-      "verified": true,
-      "purpose": "SubRip SRT burn-in rendering fallback"
-    }
-  },
-  "required_codecs": {
-    "video_encoders": ["libx264"],
-    "audio_encoders": ["aac", "libmp3lame"],
-    "audio_decoders": ["aac", "mp3", "flac", "pcm_s16le", "pcm_f32le"]
-  },
-  "status": "VERIFIED_FOR_HOST"
+  "status": "SPECIFICATION_LOCKED"
 }

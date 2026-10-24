@@ -26,16 +26,27 @@ jobs:
       - name: Set up Python 3.11
         run: uv python install 3.11
 
-      - name: Install worker dependencies
+      - name: Install worker dependencies with frozen lockfile
         run: |
           cd worker
-          uv sync
+          uv sync --frozen
+
+      - name: Test aro --version command
+        run: |
+          cd worker
+          uv run aro --version
 
       - name: Run aro doctor check
         run: |
           cd worker
           uv run aro doctor --json
+          uv run aro doctor --check
 
-      - name: Run Makefile test targets
+      - name: Run unit test suite
         run: |
-          make doctor-check
+          cd worker
+          uv run python -m unittest discover -s tests -v
+
+      - name: Run lint / syntax checks
+        run: |
+          make lint
