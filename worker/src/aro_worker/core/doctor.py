@@ -17,16 +17,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-DEFAULT_SPEC = {
-    "min_version": "4.4.0",
-    "recommended_version": "7.1.1",
-    "required_filters": ["loudnorm", "sidechaincompress", "ass", "subtitles"],
-    "required_video_encoders": ["libx264"],
-    "required_audio_encoders": ["aac"],
-    "required_audio_decoders": ["aac", "mp3", "flac", "pcm_s16le", "pcm_f32le"],
-}
-
-
 def parse_semver(v_str: str) -> Optional[Tuple[int, int, int]]:
     """Parse '4.4.0' or '4.4' into (major, minor, patch)."""
     if not v_str or not isinstance(v_str, str):
@@ -46,15 +36,17 @@ def parse_semver(v_str: str) -> Optional[Tuple[int, int, int]]:
 def parse_ffmpeg_version(version_line: str) -> Optional[Tuple[int, int, int]]:
     """
     Extract (major, minor, patch) from FFmpeg -version output.
-    Examples:
-      'ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 ...' -> (4, 4, 2)
-      'ffmpeg version 6.1.1 ...' -> (6, 1, 1)
+    Supports versions with distro suffixes and metadata, e.g.:
+      'ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 Copyright ...' -> (4, 4, 2)
+      'ffmpeg version 6.1.1-1ubuntu1 ...' -> (6, 1, 1)
       'ffmpeg version 7.1 ...' -> (7, 1, 0)
+      'ffmpeg version 4.4 ...' -> (4, 4, 0)
     Returns None if unparseable, malformed, or missing.
     """
     if not version_line or not isinstance(version_line, str):
         return None
-    m = re.search(r"ffmpeg version\s+(\d+)\.(\d+)(?:\.(\d+))?", version_line, re.IGNORECASE)
+    # Match ffmpeg version X.Y[.Z] followed by optional distro/build suffix
+    m = re.search(r"ffmpeg version\s+(\d+)\.(\d+)(?:\.(\d+))?(?:[^\s]*)", version_line, re.IGNORECASE)
     if not m:
         return None
     try:
@@ -67,7 +59,7 @@ def parse_ffmpeg_version(version_line: str) -> Optional[Tuple[int, int, int]]:
 
 
 def load_ffmpeg_specification() -> Dict[str, Any]:
-    """Load project requirements from locks/ffmpeg-manifest.json or fallback to defaults."""
+    """Load project requirements from locks/ffmpeg-manifest.json."""
     manifest_paths = [
         Path("locks/ffmpeg-manifest.json"),
         Path("../locks/ffmpeg-manifest.json"),
@@ -78,10 +70,12 @@ def load_ffmpeg_specification() -> Dict[str, Any]:
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    return data.get("specification", DEFAULT_SPEC)
+                    spec = data.get("specification")
+                    if isinstance(spec, dict):
+                        return spec
             except Exception:
                 pass
-    return DEFAULT_SPEC
+    return {}
 
 
 def check_python() -> Dict[str, Any]:
@@ -132,6 +126,7 @@ def check_ffmpeg_binaries(
     Check availability, execution return codes, and version compliance of ffmpeg and ffprobe.
     Compares detected version against locks/ffmpeg-manifest.json specification.min_version.
     Invalid or unparseable versions explicitly FAIL.
+    Missing, empty, or invalid specification.min_version explicitly FAIL with actionable_reason.
     """
     ffmpeg_bin = ffmpeg_cmd or shutil.which("ffmpeg")
     ffprobe_bin = ffprobe_cmd or shutil.which("ffprobe")
@@ -169,11 +164,37 @@ def check_ffmpeg_binaries(
             "actionable_reason": f"Error executing ffmpeg: {exc}",
         }
 
-    # Version parsing & verification against specification.min_version
-    spec_data = spec or load_ffmpeg_specification()
-    min_version_str = spec_data.get("min_version", "4.4.0")
-    min_version_tuple = parse_semver(min_version_str) or (4, 4, 0)
+    # Specification min_version verification
+    spec_data = spec if spec is not None else load_ffmpeg_specification()
+    min_version_raw = spec_data.get("min_version")
+    if min_version_raw is None or not isinstance(min_version_raw, str) or not min_version_raw.strip():
+        return {
+            "name": "ffmpeg_binaries",
+            "category": "media",
+            "status": "FAIL",
+            "ffmpeg_path": ffmpeg_bin,
+            "ffprobe_path": ffprobe_bin,
+            "version_line": first_line,
+            "detail": "Missing required 'min_version' field in FFmpeg specification.",
+            "actionable_reason": "Define a valid 'min_version' (e.g. '4.4.0') in locks/ffmpeg-manifest.json specification.",
+        }
 
+    min_version_str = min_version_raw.strip()
+    min_version_tuple = parse_semver(min_version_str)
+    if min_version_tuple is None:
+        return {
+            "name": "ffmpeg_binaries",
+            "category": "media",
+            "status": "FAIL",
+            "ffmpeg_path": ffmpeg_bin,
+            "ffprobe_path": ffprobe_bin,
+            "version_line": first_line,
+            "min_version": min_version_str,
+            "detail": f"Invalid 'min_version' format in FFmpeg specification: '{min_version_str}'.",
+            "actionable_reason": f"Correct 'min_version' format in locks/ffmpeg-manifest.json to semver 'X.Y[.Z]' (got '{min_version_str}').",
+        }
+
+    # Parse detected version from ffmpeg output
     detected_version = parse_ffmpeg_version(first_line)
     if detected_version is None:
         return {
@@ -183,6 +204,7 @@ def check_ffmpeg_binaries(
             "ffmpeg_path": ffmpeg_bin,
             "ffprobe_path": ffprobe_bin,
             "version_line": first_line,
+            "min_version": min_version_str,
             "detail": f"Could not parse FFmpeg version from output: '{first_line}'",
             "actionable_reason": f"Invalid or unparseable FFmpeg version format. Expected 'ffmpeg version X.Y[.Z]', got '{first_line}'.",
         }
@@ -212,6 +234,7 @@ def check_ffmpeg_binaries(
             "ffprobe_path": None,
             "version": first_line,
             "detected_version": detected_version_str,
+            "min_version": min_version_str,
             "detail": "ffprobe binary not found in PATH (ffmpeg is present).",
             "actionable_reason": "Install ffprobe (part of ffmpeg package) to inspect media streams.",
         }
@@ -266,7 +289,7 @@ def check_ffmpeg_capabilities(
             "actionable_reason": "Install FFmpeg before verifying capabilities against specification.",
         }
 
-    spec = spec or load_ffmpeg_specification()
+    spec = spec if spec is not None else load_ffmpeg_specification()
     required_filters = spec.get("required_filters", [])
     required_video_encoders = spec.get("required_video_encoders", [])
     required_audio_encoders = spec.get("required_audio_encoders", [])
