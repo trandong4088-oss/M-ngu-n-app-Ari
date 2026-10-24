@@ -1,5 +1,5 @@
 """
-Unit tests for aro doctor environment and capability diagnostics.
+Unit tests for aro doctor environment, FFmpeg version, and capability diagnostics.
 """
 
 import io
@@ -61,26 +61,141 @@ class TestDoctor(unittest.TestCase):
                 self.assertEqual(result["status"], "FAIL")
                 self.assertIn("non-zero exit code: 127", result["detail"])
 
-    def test_ffmpeg_capabilities_missing_filters(self):
-        """Test capability check when required filters are missing."""
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = "null\nsplit\n"
-        mock_proc.stderr = ""
+    # 1. Version at minimum
+    def test_ffmpeg_version_at_minimum(self):
+        """Test version parsing when detected FFmpeg version exactly matches minimum."""
+        mock_ffmpeg = MagicMock()
+        mock_ffmpeg.returncode = 0
+        mock_ffmpeg.stdout = "ffmpeg version 4.4.0 Copyright (c) 2000-2021\n"
+
+        mock_ffprobe = MagicMock()
+        mock_ffprobe.returncode = 0
+        mock_ffprobe.stdout = "ffprobe version 4.4.0\n"
+
+        spec = {"min_version": "4.4.0"}
+
+        with patch("subprocess.run", side_effect=[mock_ffmpeg, mock_ffprobe]):
+            result = doctor.check_ffmpeg_binaries(
+                ffmpeg_cmd="/usr/bin/ffmpeg",
+                ffprobe_cmd="/usr/bin/ffprobe",
+                spec=spec,
+            )
+            self.assertEqual(result["status"], "PASS")
+            self.assertEqual(result["detected_version"], "4.4.0")
+            self.assertIn(">= minimum 4.4.0", result["detail"])
+
+    # 2. Version below minimum
+    def test_ffmpeg_version_below_minimum(self):
+        """Test version parsing when detected FFmpeg version is below minimum."""
+        mock_ffmpeg = MagicMock()
+        mock_ffmpeg.returncode = 0
+        mock_ffmpeg.stdout = "ffmpeg version 4.3.2-ubuntu1 Copyright (c) 2000-2020\n"
+
+        mock_ffprobe = MagicMock()
+        mock_ffprobe.returncode = 0
+        mock_ffprobe.stdout = "ffprobe version 4.3.2\n"
+
+        spec = {"min_version": "4.4.0"}
+
+        with patch("subprocess.run", side_effect=[mock_ffmpeg, mock_ffprobe]):
+            result = doctor.check_ffmpeg_binaries(
+                ffmpeg_cmd="/usr/bin/ffmpeg",
+                ffprobe_cmd="/usr/bin/ffprobe",
+                spec=spec,
+            )
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(result["detected_version"], "4.3.2")
+            self.assertIn("below required minimum 4.4.0", result["detail"])
+            self.assertIn("Upgrade FFmpeg", result["actionable_reason"])
+
+    # 3. Unparseable version
+    def test_ffmpeg_version_unparseable(self):
+        """Test version parsing when FFmpeg version string cannot be parsed into semver."""
+        mock_ffmpeg = MagicMock()
+        mock_ffmpeg.returncode = 0
+        mock_ffmpeg.stdout = "ffmpeg version git-devel-custom-snapshot Copyright (c)\n"
+
+        mock_ffprobe = MagicMock()
+        mock_ffprobe.returncode = 0
+        mock_ffprobe.stdout = "ffprobe version git-devel\n"
+
+        spec = {"min_version": "4.4.0"}
+
+        with patch("subprocess.run", side_effect=[mock_ffmpeg, mock_ffprobe]):
+            result = doctor.check_ffmpeg_binaries(
+                ffmpeg_cmd="/usr/bin/ffmpeg",
+                ffprobe_cmd="/usr/bin/ffprobe",
+                spec=spec,
+            )
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("Could not parse FFmpeg version", result["detail"])
+            self.assertIn("Invalid or unparseable", result["actionable_reason"])
+
+    # 4. Missing required encoder
+    def test_ffmpeg_missing_required_encoder(self):
+        """Test capability check when a required video/audio encoder is missing."""
+        mock_filters = MagicMock(returncode=0, stdout="loudnorm\nsidechaincompress\nass\nsubtitles\n", stderr="")
+        mock_encoders = MagicMock(returncode=0, stdout="aac\n", stderr="")  # missing libx264
+        mock_decoders = MagicMock(returncode=0, stdout="aac\nmp3\nflac\npcm_s16le\npcm_f32le\n", stderr="")
 
         spec = {
-            "required_filters": ["loudnorm", "ass"],
-            "required_video_encoders": [],
-            "required_audio_encoders": [],
-            "required_audio_decoders": [],
+            "required_filters": ["loudnorm"],
+            "required_video_encoders": ["libx264"],
+            "required_audio_encoders": ["aac"],
+            "required_audio_decoders": ["aac"],
         }
 
-        with patch("subprocess.run", return_value=mock_proc):
+        with patch("subprocess.run", side_effect=[mock_filters, mock_encoders, mock_decoders]):
             result = doctor.check_ffmpeg_capabilities(ffmpeg_cmd="/usr/bin/ffmpeg", spec=spec)
             self.assertEqual(result["status"], "FAIL")
-            self.assertIn("filter:loudnorm", result["missing_items"])
-            self.assertIn("filter:ass", result["missing_items"])
-            self.assertIsNotNone(result["actionable_reason"])
+            self.assertIn("encoder:libx264", result["missing_items"])
+            self.assertIn("Missing components", result["actionable_reason"])
+
+    # 5. Missing required decoder
+    def test_ffmpeg_missing_required_decoder(self):
+        """Test capability check when a required audio decoder is missing."""
+        mock_filters = MagicMock(returncode=0, stdout="loudnorm\n", stderr="")
+        mock_encoders = MagicMock(returncode=0, stdout="libx264\naac\n", stderr="")
+        mock_decoders = MagicMock(returncode=0, stdout="aac\nmp3\n", stderr="")  # missing flac
+
+        spec = {
+            "required_filters": ["loudnorm"],
+            "required_video_encoders": ["libx264"],
+            "required_audio_encoders": ["aac"],
+            "required_audio_decoders": ["flac"],
+        }
+
+        with patch("subprocess.run", side_effect=[mock_filters, mock_encoders, mock_decoders]):
+            result = doctor.check_ffmpeg_capabilities(ffmpeg_cmd="/usr/bin/ffmpeg", spec=spec)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("decoder:flac", result["missing_items"])
+            self.assertIn("Missing components", result["actionable_reason"])
+
+    # 6. Non-zero return code from capability commands (filters, encoders, decoders)
+    def test_ffmpeg_capability_commands_nonzero_returncode(self):
+        """Test capability check when ffmpeg capability commands exit with non-zero code."""
+        # 6a: filters command fails
+        mock_fail = MagicMock(returncode=1, stdout="", stderr="Internal filter error")
+        with patch("subprocess.run", return_value=mock_fail):
+            res_flt = doctor.check_ffmpeg_capabilities(ffmpeg_cmd="/usr/bin/ffmpeg")
+            self.assertEqual(res_flt["status"], "FAIL")
+            self.assertIn("exit code 1", res_flt["detail"])
+
+        # 6b: encoders command fails
+        mock_pass_flt = MagicMock(returncode=0, stdout="loudnorm\nsidechaincompress\nass\nsubtitles\n", stderr="")
+        mock_fail_enc = MagicMock(returncode=2, stdout="", stderr="Encoder enumeration failed")
+        with patch("subprocess.run", side_effect=[mock_pass_flt, mock_fail_enc]):
+            res_enc = doctor.check_ffmpeg_capabilities(ffmpeg_cmd="/usr/bin/ffmpeg")
+            self.assertEqual(res_enc["status"], "FAIL")
+            self.assertIn("exit code 2", res_enc["detail"])
+
+        # 6c: decoders command fails
+        mock_pass_enc = MagicMock(returncode=0, stdout="libx264\naac\n", stderr="")
+        mock_fail_dec = MagicMock(returncode=127, stdout="", stderr="Command aborted")
+        with patch("subprocess.run", side_effect=[mock_pass_flt, mock_pass_enc, mock_fail_dec]):
+            res_dec = doctor.check_ffmpeg_capabilities(ffmpeg_cmd="/usr/bin/ffmpeg")
+            self.assertEqual(res_dec["status"], "FAIL")
+            self.assertIn("exit code 127", res_dec["detail"])
 
     def test_gpu_missing_fallback(self):
         """Test that missing GPU returns BLOCKED status with CPU fallback."""

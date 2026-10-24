@@ -8,21 +8,62 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 DEFAULT_SPEC = {
     "min_version": "4.4.0",
+    "recommended_version": "7.1.1",
     "required_filters": ["loudnorm", "sidechaincompress", "ass", "subtitles"],
     "required_video_encoders": ["libx264"],
     "required_audio_encoders": ["aac"],
     "required_audio_decoders": ["aac", "mp3", "flac", "pcm_s16le", "pcm_f32le"],
 }
+
+
+def parse_semver(v_str: str) -> Optional[Tuple[int, int, int]]:
+    """Parse '4.4.0' or '4.4' into (major, minor, patch)."""
+    if not v_str or not isinstance(v_str, str):
+        return None
+    m = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?$", v_str.strip())
+    if not m:
+        return None
+    try:
+        major = int(m.group(1))
+        minor = int(m.group(2))
+        patch = int(m.group(3)) if m.group(3) is not None else 0
+        return (major, minor, patch)
+    except (ValueError, TypeError):
+        return None
+
+
+def parse_ffmpeg_version(version_line: str) -> Optional[Tuple[int, int, int]]:
+    """
+    Extract (major, minor, patch) from FFmpeg -version output.
+    Examples:
+      'ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 ...' -> (4, 4, 2)
+      'ffmpeg version 6.1.1 ...' -> (6, 1, 1)
+      'ffmpeg version 7.1 ...' -> (7, 1, 0)
+    Returns None if unparseable, malformed, or missing.
+    """
+    if not version_line or not isinstance(version_line, str):
+        return None
+    m = re.search(r"ffmpeg version\s+(\d+)\.(\d+)(?:\.(\d+))?", version_line, re.IGNORECASE)
+    if not m:
+        return None
+    try:
+        major = int(m.group(1))
+        minor = int(m.group(2))
+        patch = int(m.group(3)) if m.group(3) is not None else 0
+        return (major, minor, patch)
+    except (ValueError, TypeError):
+        return None
 
 
 def load_ffmpeg_specification() -> Dict[str, Any]:
@@ -83,9 +124,15 @@ def check_disk_space(path: str = ".") -> Dict[str, Any]:
 
 
 def check_ffmpeg_binaries(
-    ffmpeg_cmd: Optional[str] = None, ffprobe_cmd: Optional[str] = None
+    ffmpeg_cmd: Optional[str] = None,
+    ffprobe_cmd: Optional[str] = None,
+    spec: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Check availability and execution return codes of ffmpeg and ffprobe binaries."""
+    """
+    Check availability, execution return codes, and version compliance of ffmpeg and ffprobe.
+    Compares detected version against locks/ffmpeg-manifest.json specification.min_version.
+    Invalid or unparseable versions explicitly FAIL.
+    """
     ffmpeg_bin = ffmpeg_cmd or shutil.which("ffmpeg")
     ffprobe_bin = ffprobe_cmd or shutil.which("ffprobe")
 
@@ -112,7 +159,7 @@ def check_ffmpeg_binaries(
                 "detail": f"ffmpeg -version returned non-zero exit code: {res_ffmpeg.returncode}",
                 "actionable_reason": f"ffmpeg command failed with stderr: {res_ffmpeg.stderr.strip()}",
             }
-        first_line = res_ffmpeg.stdout.splitlines()[0] if res_ffmpeg.stdout else "unknown"
+        first_line = res_ffmpeg.stdout.splitlines()[0] if res_ffmpeg.stdout else ""
     except Exception as exc:
         return {
             "name": "ffmpeg_binaries",
@@ -120,6 +167,39 @@ def check_ffmpeg_binaries(
             "status": "FAIL",
             "detail": str(exc),
             "actionable_reason": f"Error executing ffmpeg: {exc}",
+        }
+
+    # Version parsing & verification against specification.min_version
+    spec_data = spec or load_ffmpeg_specification()
+    min_version_str = spec_data.get("min_version", "4.4.0")
+    min_version_tuple = parse_semver(min_version_str) or (4, 4, 0)
+
+    detected_version = parse_ffmpeg_version(first_line)
+    if detected_version is None:
+        return {
+            "name": "ffmpeg_binaries",
+            "category": "media",
+            "status": "FAIL",
+            "ffmpeg_path": ffmpeg_bin,
+            "ffprobe_path": ffprobe_bin,
+            "version_line": first_line,
+            "detail": f"Could not parse FFmpeg version from output: '{first_line}'",
+            "actionable_reason": f"Invalid or unparseable FFmpeg version format. Expected 'ffmpeg version X.Y[.Z]', got '{first_line}'.",
+        }
+
+    detected_version_str = f"{detected_version[0]}.{detected_version[1]}.{detected_version[2]}"
+    if detected_version < min_version_tuple:
+        return {
+            "name": "ffmpeg_binaries",
+            "category": "media",
+            "status": "FAIL",
+            "ffmpeg_path": ffmpeg_bin,
+            "ffprobe_path": ffprobe_bin,
+            "version_line": first_line,
+            "detected_version": detected_version_str,
+            "min_version": min_version_str,
+            "detail": f"Detected FFmpeg version {detected_version_str} is below required minimum {min_version_str}.",
+            "actionable_reason": f"Upgrade FFmpeg to at least version {min_version_str} (recommended: {spec_data.get('recommended_version', '7.1.1')}).",
         }
 
     # Verify ffprobe execution and return code
@@ -131,6 +211,7 @@ def check_ffmpeg_binaries(
             "ffmpeg_path": ffmpeg_bin,
             "ffprobe_path": None,
             "version": first_line,
+            "detected_version": detected_version_str,
             "detail": "ffprobe binary not found in PATH (ffmpeg is present).",
             "actionable_reason": "Install ffprobe (part of ffmpeg package) to inspect media streams.",
         }
@@ -161,7 +242,9 @@ def check_ffmpeg_binaries(
         "ffmpeg_path": ffmpeg_bin,
         "ffprobe_path": ffprobe_bin,
         "version_line": first_line,
-        "detail": first_line,
+        "detected_version": detected_version_str,
+        "min_version": min_version_str,
+        "detail": f"{first_line} (Version {detected_version_str} >= minimum {min_version_str})",
         "actionable_reason": None,
     }
 
@@ -170,7 +253,7 @@ def check_ffmpeg_capabilities(
     ffmpeg_cmd: Optional[str] = None, spec: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
-    Compare actual host FFmpeg filters, encoders, and decoders against the project specification.
+    Compare actual host FFmpeg filters, encoders, and decoders against project specification.
     Verifies command execution return codes.
     """
     ffmpeg_bin = ffmpeg_cmd or shutil.which("ffmpeg")
@@ -200,7 +283,7 @@ def check_ffmpeg_capabilities(
                 "category": "media",
                 "status": "FAIL",
                 "detail": f"ffmpeg -filters returned exit code {res_filters.returncode}",
-                "actionable_reason": "Failed to inspect FFmpeg filters.",
+                "actionable_reason": f"Failed to inspect FFmpeg filters: exit code {res_filters.returncode}.",
             }
         filters_output = res_filters.stdout + res_filters.stderr
         for flt in required_filters:
@@ -224,7 +307,7 @@ def check_ffmpeg_capabilities(
                 "category": "media",
                 "status": "FAIL",
                 "detail": f"ffmpeg -encoders returned exit code {res_enc.returncode}",
-                "actionable_reason": "Failed to inspect FFmpeg encoders.",
+                "actionable_reason": f"Failed to inspect FFmpeg encoders: exit code {res_enc.returncode}.",
             }
         encoders_output = res_enc.stdout + res_enc.stderr
         for enc in required_video_encoders + required_audio_encoders:
@@ -248,7 +331,7 @@ def check_ffmpeg_capabilities(
                 "category": "media",
                 "status": "FAIL",
                 "detail": f"ffmpeg -decoders returned exit code {res_dec.returncode}",
-                "actionable_reason": "Failed to inspect FFmpeg decoders.",
+                "actionable_reason": f"Failed to inspect FFmpeg decoders: exit code {res_dec.returncode}.",
             }
         decoders_output = res_dec.stdout + res_dec.stderr
         for dec in required_audio_decoders:

@@ -1,11 +1,11 @@
 {
   "task_id": "A01",
   "task_name": "Repository Bootstrap & Reproducible Runtime",
-  "timestamp": "2026-10-24T02:10:42.972930+00:00",
+  "timestamp": "2026-10-24T10:45:42.793208+00:00",
   "status": "PASS",
   "doctor": {
     "schema_version": "1.0",
-    "timestamp": "2026-10-24T02:10:42.972930+00:00",
+    "timestamp": "2026-10-24T10:45:42.793208+00:00",
     "aro_worker_version": "0.1.0",
     "overall_status": "DEGRADED",
     "checks": [
@@ -34,7 +34,9 @@
         "ffmpeg_path": "/usr/bin/ffmpeg",
         "ffprobe_path": "/usr/bin/ffprobe",
         "version_line": "ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 Copyright (c) 2000-2021 the FFmpeg developers",
-        "detail": "ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 Copyright (c) 2000-2021 the FFmpeg developers",
+        "detected_version": "4.4.2",
+        "min_version": "4.4.0",
+        "detail": "ffmpeg version 4.4.2-0ubuntu0.22.04.1+esm17 Copyright (c) 2000-2021 the FFmpeg developers (Version 4.4.2 >= minimum 4.4.0)",
         "actionable_reason": null
       },
       {
@@ -96,14 +98,16 @@
     "locks/runtime-profiles.json": "2b455abdcf791bb5977ef6e9bb1764964d8f6c97b31975e7db6aa20a1fee9e0f"
   },
   "criteria": {
-    "repo_monorepo_layout": "PASS",
-    "aro_worker_package_installed": "PASS",
-    "cli_aro_version_functional": "PASS",
-    "cli_aro_doctor_diagnosis": "PASS",
-    "reproducible_runtime_uv_frozen_sync": "PASS",
-    "ffmpeg_capabilities_vs_manifest_verified": "PASS",
-    "architecture_specs_copied": "PASS",
-    "unit_tests_suite_cli_and_doctor": "PASS (10 tests executed)",
+    "repo_monorepo_layout": "PASS (monorepo worker/ configs/ docs/ locks/ notebooks/)",
+    "aro_worker_package_installed": "PASS (aro-worker 0.1.0 via hatchling/uv)",
+    "cli_aro_version_functional": "PASS (exit code 0, outputs aro-worker 0.1.0)",
+    "cli_aro_doctor_diagnosis": "PASS (exit code 0, outputs valid schema 1.0 JSON)",
+    "reproducible_runtime_uv_frozen_sync": "PASS (uv sync --frozen exit code 0)",
+    "ffmpeg_version_parsing_and_min_version_check": "PASS (parsed 4.4.2 >= min 4.4.0)",
+    "ffmpeg_capabilities_vs_manifest_verified": "PASS (verified filters, encoders, decoders, exit code checks)",
+    "unit_tests_suite_cli_and_doctor": "PASS (15 tests ran, 0 failures, 0 errors, exit code 0)",
+    "syntax_py_compile": "PASS (py_compile exit code 0)",
+    "doctor_check_assertion": "PASS (aro doctor --check exit code 0)",
     "strict_supported_features_boundary": "PASS (only cli and doctor claimed)",
     "cuda_gpu_acceleration": "BLOCKED (CPU host environment, actionable fallback)",
     "audio_extract_implementation": "BLOCKED (Scheduled for Task A06)",
